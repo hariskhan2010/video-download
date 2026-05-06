@@ -8,11 +8,15 @@ if (!fs.existsSync(downloadsDir)) {
   fs.mkdirSync(downloadsDir, { recursive: true });
 }
 
-exports.downloadVideo = (url, jobId) => {
+exports.downloadVideo = (url, jobId, quality) => {
   return new Promise((resolve, reject) => {
     const outputTemplate = path.join(downloadsDir, `${jobId}.%(ext)s`);
     
-    exec(`yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`, (error, stdout, stderr) => {
+    const qualityFormat = quality === 'hd' 
+      ? '"bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]"'
+      : '"bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]"';
+    
+    exec(`yt-dlp -f ${qualityFormat} --merge-output-format mp4 -o "${outputTemplate}" "${url}"`, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(stderr || error.message));
         return;

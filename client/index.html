@@ -30,6 +30,24 @@
     .container:hover {
       transform: rotateX(0deg) translateY(-5px);
     }
+    .quality-selector {
+      margin: 15px 0;
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+    }
+    .quality-selector label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #555;
+    }
+    .quality-selector input[type="radio"] {
+      cursor: pointer;
+      accent-color: #667eea;
+    }
     h1 {
       text-align: center;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -149,6 +167,10 @@
     <div class="input-group">
       <input type="text" id="url" placeholder="Paste video URL here">
     </div>
+    <div class="quality-selector">
+      <label><input type="radio" name="quality" value="hd" checked> HD Quality</label>
+      <label><input type="radio" name="quality" value="normal"> Normal Quality</label>
+    </div>
     <button onclick="startDownload()">Download</button>
     <div id="status"></div>
   </div>
@@ -161,6 +183,7 @@
       const url = document.getElementById('url').value;
       if (!url) return alert('Please enter a URL');
 
+      const quality = document.querySelector('input[name="quality"]:checked').value;
       const btn = document.querySelector('button');
       btn.disabled = true;
       btn.textContent = 'Processing...';
@@ -168,7 +191,7 @@
       const res = await fetch('http://localhost:3000/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        body: JSON.stringify({ url, quality })
       });
 
       const data = await res.json();
