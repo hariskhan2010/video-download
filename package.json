@@ -1,0 +1,8 @@
+{
+  "name": "video-downloader",
+  "version": "1.0.0",
+  "description": "Video downloader system with combined dev command",
+  "scripts": {
+    "dev": "cd server && npm run dev"
+  }
+}

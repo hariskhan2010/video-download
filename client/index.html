@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Downloader 3D</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+      perspective: 1000px;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.95);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3), 0 0 100px rgba(102, 126, 234, 0.5);
+      transform: rotateX(5deg);
+      transition: transform 0.3s ease;
+      width: 100%;
+      max-width: 500px;
+    }
+    .container:hover {
+      transform: rotateX(0deg) translateY(-5px);
+    }
+    h1 {
+      text-align: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 32px;
+      margin-bottom: 30px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+    .input-group {
+      position: relative;
+      margin-bottom: 20px;
+    }
+    input {
+      width: 100%;
+      padding: 15px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 10px;
+      background: #f0f0f0;
+      box-shadow: inset 0 2px 5px rgba(0,0,0,0.1), 0 1px 0 rgba(255,255,255,0.8);
+      transition: all 0.3s ease;
+    }
+    input:focus {
+      outline: none;
+      background: white;
+      box-shadow: inset 0 2px 5px rgba(102, 126, 234, 0.2), 0 0 20px rgba(102, 126, 234, 0.3);
+    }
+    button {
+      width: 100%;
+      padding: 18px;
+      font-size: 18px;
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      cursor: pointer;
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4), 0 2px 5px rgba(0,0,0,0.2);
+      transform: translateZ(0);
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    button:hover:not(:disabled) {
+      transform: translateY(-2px) translateZ(10px);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6), 0 4px 10px rgba(0,0,0,0.3);
+    }
+    button:active:not(:disabled) {
+      transform: translateY(0) translateZ(0);
+      box-shadow: 0 2px 10px rgba(102, 126, 234, 0.4);
+    }
+    button:disabled {
+      background: linear-gradient(135deg, #ccc 0%, #999 100%);
+      cursor: not-allowed;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    #status {
+      margin-top: 25px;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      font-weight: bold;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .pending {
+      background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%);
+      color: #f57f17;
+    }
+    .downloading {
+      background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%);
+      color: #1565c0;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    .done {
+      background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
+      color: #2e7d32;
+    }
+    .error {
+      background: linear-gradient(135deg, #ffcdd2 0%, #ef9a9a 100%);
+      color: #c62828;
+    }
+    #status a {
+      display: block;
+      margin-top: 15px;
+      padding: 12px;
+      background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      box-shadow: 0 3px 10px rgba(76, 175, 80, 0.4);
+      transition: all 0.3s ease;
+    }
+    #status a:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(76, 175, 80, 0.6);
+    }
+    @media (max-width: 600px) {
+      .container { padding: 25px; }
+      h1 { font-size: 24px; }
+      input, button { padding: 12px; font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Video Downloader</h1>
+    <div class="input-group">
+      <input type="text" id="url" placeholder="Paste video URL here">
+    </div>
+    <button onclick="startDownload()">Download</button>
+    <div id="status"></div>
+  </div>
+
+  <script>
+    let currentJobId = null;
+    let pollInterval = null;
+
+    async function startDownload() {
+      const url = document.getElementById('url').value;
+      if (!url) return alert('Please enter a URL');
+
+      const btn = document.querySelector('button');
+      btn.disabled = true;
+      btn.textContent = 'Processing...';
+
+      const res = await fetch('http://localhost:3000/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+
+      const data = await res.json();
+      currentJobId = data.jobId;
+      updateStatus('pending', 'Status: Pending...');
+
+      pollStatus();
+    }
+
+    function updateStatus(status, message) {
+      const statusDiv = document.getElementById('status');
+      statusDiv.className = status;
+      statusDiv.innerHTML = message;
+    }
+
+    function pollStatus() {
+      if (pollInterval) clearInterval(pollInterval);
+      
+      pollInterval = setInterval(async () => {
+        const res = await fetch(`http://localhost:3000/api/status/${currentJobId}`);
+        const job = await res.json();
+
+        updateStatus(job.status, `Status: ${job.status}`);
+
+        if (job.status === 'done') {
+          clearInterval(pollInterval);
+          const statusDiv = document.getElementById('status');
+          statusDiv.innerHTML += `<br><a href="http://localhost:3000/api/file/${currentJobId}" download>Download File</a>`;
+          const btn = document.querySelector('button');
+          btn.disabled = false;
+          btn.textContent = 'Download';
+        } else if (job.status === 'error') {
+          clearInterval(pollInterval);
+          updateStatus('error', `Status: Error<br>${job.error}`);
+          const btn = document.querySelector('button');
+          btn.disabled = false;
+          btn.textContent = 'Download';
+        }
+      }, 2000);
+    }
+  </script>
+</body>
+</html>

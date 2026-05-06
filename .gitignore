@@ -1,0 +1,10 @@
+node_modules/
+npm-debug.log
+.env
+*.log
+downloads/
+*.mp4
+*.m4a
+*.webm
+*.mp3
+.DS_Store
