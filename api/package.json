@@ -1,0 +1,8 @@
+{
+  "name": "video-downloader",
+  "version": "1.0.0",
+  "description": "Video downloader for Vercel",
+  "dependencies": {
+    "uuid": "^11.1.0"
+  }
+}

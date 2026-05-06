@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/download.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/status.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "client/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/download",
+      "dest": "/api/download.js"
+    },
+    {
+      "src": "/api/status/(?<id>[^/]+)",
+      "dest": "/api/status.js?id=$id"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/client/$1"
+    }
+  ]
+}
