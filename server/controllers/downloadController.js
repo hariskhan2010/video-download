@@ -4,7 +4,7 @@ const videoService = require('../services/videoService');
 const jobs = new Map();
 
 exports.startDownload = async (req, res) => {
-  const { url, quality } = req.body;
+  const { url } = req.body;
   
   if (!url) {
     return res.status(400).json({ error: 'URL is required' });
@@ -17,7 +17,7 @@ exports.startDownload = async (req, res) => {
 
   try {
     jobs.set(jobId, { ...jobs.get(jobId), status: 'downloading' });
-    const filename = await videoService.downloadVideo(url, jobId, quality);
+    const filename = await videoService.downloadVideo(url, jobId);
     jobs.set(jobId, { status: 'done', url, filename, error: null });
   } catch (error) {
     jobs.set(jobId, { ...jobs.get(jobId), status: 'error', error: error.message });
