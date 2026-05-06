@@ -13,8 +13,8 @@ exports.downloadVideo = (url, jobId, quality) => {
     const outputTemplate = path.join(downloadsDir, `${jobId}.%(ext)s`);
     
     const qualityFormat = quality === 'hd' 
-      ? '"bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]"'
-      : '"bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]"';
+      ? 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]'
+      : 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]';
     
     exec(`yt-dlp -f ${qualityFormat} --merge-output-format mp4 -o "${outputTemplate}" "${url}"`, (error, stdout, stderr) => {
       if (error) {
