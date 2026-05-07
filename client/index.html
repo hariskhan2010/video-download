@@ -158,7 +158,8 @@
     let pollInterval = null;
 
     async function startDownload() {
-      const url = document.getElementById('url').value;
+      const urlInput = document.getElementById('url');
+      const url = urlInput.value.trim();
       if (!url) return alert('Please enter a URL');
 
       const btn = document.querySelector('button');
@@ -172,18 +173,33 @@
           body: JSON.stringify({ url })
         });
 
-        const data = await res.json();
-        if (data.error) {
-          resetButton();
-          return updateStatus('error', data.error);
-        }
+        const contentType = res.headers.get('Content-Type') || '';
 
-        currentJobId = data.jobId;
-        updateStatus('pending', 'Queued...');
-        pollStatus();
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data.error) {
+            return resetWithError(data.error);
+          }
+          if (data.downloadUrl) {
+            updateStatus('done', 'Download ready!');
+            showDownloadLink(data.downloadUrl);
+            return resetButton();
+          }
+          currentJobId = data.jobId;
+          updateStatus('pending', 'Queued...');
+          pollStatus();
+        } else if (contentType.includes('video') || contentType.includes('octet-stream')) {
+          const blob = await res.blob();
+          const downloadUrl = URL.createObjectURL(blob);
+          const filename = (res.headers.get('Content-Disposition') || '').match(/filename="?(.+?)"?$/)?.[1] || 'video.mp4';
+          updateStatus('done', 'Download ready!');
+          showDownloadLink(downloadUrl, filename);
+          resetButton();
+        } else {
+          resetWithError('Unexpected server response');
+        }
       } catch (err) {
-        resetButton();
-        updateStatus('error', 'Connection failed. Check if server is running.');
+        resetWithError('Connection failed. Check if server is running.');
       }
     }
 
@@ -199,41 +215,54 @@
       btn.textContent = 'Download';
     }
 
+    function resetWithError(msg) {
+      resetButton();
+      updateStatus('error', msg);
+    }
+
+    function showDownloadLink(url, filename) {
+      const statusDiv = document.getElementById('status');
+      statusDiv.innerHTML += `<br><a href="${url}" download="${filename || ''}">Download File</a>`;
+    }
+
     function pollStatus() {
       if (pollInterval) clearInterval(pollInterval);
+
+      let retries = 0;
+      const maxRetries = 5;
 
       pollInterval = setInterval(async () => {
         try {
           const res = await fetch(`/api/status/${currentJobId}`);
           if (!res.ok) {
-            resetButton();
+            if (retries < maxRetries) {
+              retries++;
+              return;
+            }
             clearInterval(pollInterval);
-            return updateStatus('error', 'Job not found');
+            return resetWithError('Job not found (server may have restarted)');
           }
 
           const job = await res.json();
           if (!job || !job.status) {
-            resetButton();
             clearInterval(pollInterval);
-            return updateStatus('error', 'Invalid server response');
+            return resetWithError('Invalid server response');
           }
 
+          retries = 0;
           updateStatus(job.status, `Status: ${job.status}`);
 
           if (job.status === 'done') {
             clearInterval(pollInterval);
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML += `<br><a href="/api/file/${currentJobId}" download>Download File</a>`;
+            showDownloadLink(`/api/file/${currentJobId}`);
             resetButton();
           } else if (job.status === 'error') {
             clearInterval(pollInterval);
-            updateStatus('error', `Error: ${job.error || 'Unknown error'}`);
-            resetButton();
+            resetWithError(job.error || 'Download failed');
           }
         } catch (err) {
           clearInterval(pollInterval);
-          resetButton();
-          updateStatus('error', 'Connection lost. Check server.');
+          resetWithError('Connection lost. Check server.');
         }
       }, 2000);
     }

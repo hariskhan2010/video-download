@@ -3,15 +3,13 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-const JOBS_FILE = path.join('/tmp', 'jobs.json');
-
-function readJobs() {
-  if (!fs.existsSync(JOBS_FILE)) return {};
-  return JSON.parse(fs.readFileSync(JOBS_FILE, 'utf8'));
-}
-
-function writeJobs(jobs) {
-  fs.writeFileSync(JOBS_FILE, JSON.stringify(jobs, null, 2));
+function execPromise(cmd) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { maxBuffer: 1024 * 1024 * 100 }, (error, stdout, stderr) => {
+      if (error) reject(new Error(stderr || error.message));
+      else resolve(stdout);
+    });
+  });
 }
 
 module.exports = async (req, res) => {
@@ -25,40 +23,29 @@ module.exports = async (req, res) => {
   }
 
   const jobId = uuidv4();
-  const jobs = readJobs();
-  jobs[jobId] = { status: 'pending', url, filename: null, error: null };
-  writeJobs(jobs);
+  const downloadsDir = '/tmp/downloads';
+  if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
 
-  res.json({ jobId, status: 'pending' });
+  const outputPath = path.join(downloadsDir, `${jobId}.mp4`);
 
   try {
-    jobs[jobId].status = 'downloading';
-    writeJobs(jobs);
-    
-    const downloadsDir = '/tmp/downloads';
-    if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
-    
-    const outputTemplate = path.join(downloadsDir, `${jobId}.%(ext)s`);
-    
-    exec(`yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`, 
-      (error, stdout, stderr) => {
-        if (error) {
-          jobs[jobId].status = 'error';
-          jobs[jobId].error = stderr || error.message;
-        } else {
-          const files = fs.readdirSync(downloadsDir);
-          const downloadedFile = files.find(f => f.startsWith(jobId));
-          if (downloadedFile) {
-            jobs[jobId].status = 'done';
-            jobs[jobId].filename = path.join(downloadsDir, downloadedFile);
-          }
-        }
-        writeJobs(jobs);
-      }
+    await execPromise(
+      `yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputPath}" "${url}"`
     );
+
+    if (!fs.existsSync(outputPath)) {
+      return res.status(500).json({ error: 'Download failed - output file not found' });
+    }
+
+    const stat = fs.statSync(outputPath);
+    res.writeHead(200, {
+      'Content-Type': 'video/mp4',
+      'Content-Disposition': `attachment; filename="video-${jobId}.mp4"`,
+      'Content-Length': stat.size,
+    });
+    const stream = fs.createReadStream(outputPath);
+    stream.pipe(res);
   } catch (error) {
-    jobs[jobId].status = 'error';
-    jobs[jobId].error = error.message;
-    writeJobs(jobs);
+    res.status(500).json({ error: error.message });
   }
 };

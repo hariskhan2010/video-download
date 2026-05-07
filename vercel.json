@@ -10,10 +10,19 @@
       "use": "@vercel/node"
     },
     {
+      "src": "api/file.js",
+      "use": "@vercel/node"
+    },
+    {
       "src": "client/**",
       "use": "@vercel/static"
     }
   ],
+  "functions": {
+    "api/download.js": {
+      "maxDuration": 60
+    }
+  },
   "routes": [
     {
       "src": "/api/download",
@@ -22,6 +31,10 @@
     {
       "src": "/api/status/(?<id>[^/]+)",
       "dest": "/api/status.js?id=$id"
+    },
+    {
+      "src": "/api/file/(?<id>[^/]+)",
+      "dest": "/api/file.js?id=$id"
     },
     {
       "src": "/(.*)",
