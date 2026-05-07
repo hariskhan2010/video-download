@@ -1,7 +1,7 @@
-const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const youtubedl = require('@distube/yt-dlp');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -13,19 +13,6 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'URL is required' });
   }
 
-  try {
-    await new Promise((resolve, reject) => {
-      exec('yt-dlp --version', (error, stdout) => {
-        if (error) reject(error);
-        else resolve(stdout);
-      });
-    });
-  } catch {
-    return res.status(500).json({
-      error: 'yt-dlp is not installed on the server.'
-    });
-  }
-
   const downloadsDir = '/tmp/downloads';
   if (!fs.existsSync(downloadsDir)) {
     fs.mkdirSync(downloadsDir, { recursive: true });
@@ -35,14 +22,10 @@ module.exports = async (req, res) => {
   const outputTemplate = path.join(downloadsDir, `${jobId}.%(ext)s`);
 
   try {
-    await new Promise((resolve, reject) => {
-      exec(
-        `yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`,
-        (error, stdout, stderr) => {
-          if (error) reject(new Error(stderr || error.message));
-          else resolve(stdout);
-        }
-      );
+    await youtubedl.exec(url, {
+      format: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+      mergeOutputFormat: 'mp4',
+      output: outputTemplate,
     });
   } catch (error) {
     return res.status(500).json({ error: `Download failed: ${error.message}` });
