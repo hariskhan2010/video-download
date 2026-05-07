@@ -1,7 +1,18 @@
+const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const youtubedl = require('@distube/yt-dlp');
+
+const ytDlpDir = '/tmp/yt-dlp-bin';
+const ytDlpPath = path.join(ytDlpDir, `yt-dlp${process.platform === 'win32' ? '.exe' : ''}`);
+
+async function ensureBinary() {
+  if (fs.existsSync(ytDlpPath)) return;
+  if (!fs.existsSync(ytDlpDir)) fs.mkdirSync(ytDlpDir, { recursive: true });
+  const res = await fetch('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp');
+  const buf = Buffer.from(await res.arrayBuffer());
+  fs.writeFileSync(ytDlpPath, buf, { mode: 0o755 });
+}
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -13,6 +24,12 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'URL is required' });
   }
 
+  try {
+    await ensureBinary();
+  } catch (error) {
+    return res.status(500).json({ error: `Failed to get yt-dlp: ${error.message}` });
+  }
+
   const downloadsDir = '/tmp/downloads';
   if (!fs.existsSync(downloadsDir)) {
     fs.mkdirSync(downloadsDir, { recursive: true });
@@ -22,10 +39,14 @@ module.exports = async (req, res) => {
   const outputTemplate = path.join(downloadsDir, `${jobId}.%(ext)s`);
 
   try {
-    await youtubedl.exec(url, {
-      format: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-      mergeOutputFormat: 'mp4',
-      output: outputTemplate,
+    await new Promise((resolve, reject) => {
+      exec(
+        `"${ytDlpPath}" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`,
+        (error, stdout, stderr) => {
+          if (error) reject(new Error(stderr || error.message));
+          else resolve(stdout);
+        }
+      );
     });
   } catch (error) {
     return res.status(500).json({ error: `Download failed: ${error.message}` });

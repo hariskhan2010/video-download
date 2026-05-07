@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "Video downloader for Vercel",
   "dependencies": {
-    "@distube/yt-dlp": "^2.0.1",
     "uuid": "^11.1.0"
   }
 }
