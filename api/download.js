@@ -3,15 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-function execPromise(cmd) {
-  return new Promise((resolve, reject) => {
-    exec(cmd, { maxBuffer: 1024 * 1024 * 100 }, (error, stdout, stderr) => {
-      if (error) reject(new Error(stderr || error.message));
-      else resolve(stdout);
-    });
-  });
-}
-
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -23,29 +14,44 @@ module.exports = async (req, res) => {
   }
 
   const jobId = uuidv4();
+  const jobsDir = '/tmp/jobs';
   const downloadsDir = '/tmp/downloads';
+  if (!fs.existsSync(jobsDir)) fs.mkdirSync(jobsDir, { recursive: true });
   if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
 
-  const outputPath = path.join(downloadsDir, `${jobId}.mp4`);
+  const job = { status: 'pending', url, filename: null, error: null };
+  fs.writeFileSync(path.join(jobsDir, `${jobId}.json`), JSON.stringify(job));
+
+  res.json({ jobId, status: 'pending' });
 
   try {
-    await execPromise(
-      `yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputPath}" "${url}"`
+    job.status = 'downloading';
+    fs.writeFileSync(path.join(jobsDir, `${jobId}.json`), JSON.stringify(job));
+
+    const outputTemplate = path.join(downloadsDir, `${jobId}.%(ext)s`);
+
+    exec(`yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`,
+      (error, stdout, stderr) => {
+        if (error) {
+          job.status = 'error';
+          job.error = stderr || error.message;
+        } else {
+          const files = fs.readdirSync(downloadsDir);
+          const downloadedFile = files.find(f => f.startsWith(jobId));
+          if (downloadedFile) {
+            job.status = 'done';
+            job.filename = path.join(downloadsDir, downloadedFile);
+          } else {
+            job.status = 'error';
+            job.error = 'Downloaded file not found';
+          }
+        }
+        fs.writeFileSync(path.join(jobsDir, `${jobId}.json`), JSON.stringify(job));
+      }
     );
-
-    if (!fs.existsSync(outputPath)) {
-      return res.status(500).json({ error: 'Download failed - output file not found' });
-    }
-
-    const stat = fs.statSync(outputPath);
-    res.writeHead(200, {
-      'Content-Type': 'video/mp4',
-      'Content-Disposition': `attachment; filename="video-${jobId}.mp4"`,
-      'Content-Length': stat.size,
-    });
-    const stream = fs.createReadStream(outputPath);
-    stream.pipe(res);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    job.status = 'error';
+    job.error = error.message;
+    fs.writeFileSync(path.join(jobsDir, `${jobId}.json`), JSON.stringify(job));
   }
 };

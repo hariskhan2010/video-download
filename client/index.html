@@ -177,21 +177,16 @@
 
         if (contentType.includes('application/json')) {
           const data = await res.json();
-          if (data.error) {
-            return resetWithError(data.error);
-          }
-          if (data.downloadUrl) {
-            updateStatus('done', 'Download ready!');
-            showDownloadLink(data.downloadUrl);
-            return resetButton();
-          }
+          if (data.error) return resetWithError(data.error);
+
           currentJobId = data.jobId;
           updateStatus('pending', 'Queued...');
           pollStatus();
         } else if (contentType.includes('video') || contentType.includes('octet-stream')) {
           const blob = await res.blob();
           const downloadUrl = URL.createObjectURL(blob);
-          const filename = (res.headers.get('Content-Disposition') || '').match(/filename="?(.+?)"?$/)?.[1] || 'video.mp4';
+          const match = (res.headers.get('Content-Disposition') || '').match(/filename="?(.+?)"?$/);
+          const filename = match ? match[1] : 'video.mp4';
           updateStatus('done', 'Download ready!');
           showDownloadLink(downloadUrl, filename);
           resetButton();
