@@ -165,7 +165,7 @@
       btn.disabled = true;
       btn.textContent = 'Processing...';
 
-      const res = await fetch('http://localhost:3000/api/download', {
+      const res = await fetch('/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url })
@@ -188,7 +188,7 @@
       if (pollInterval) clearInterval(pollInterval);
       
       pollInterval = setInterval(async () => {
-        const res = await fetch(`http://localhost:3000/api/status/${currentJobId}`);
+        const res = await fetch(`/api/status/${currentJobId}`);
         const job = await res.json();
 
         updateStatus(job.status, `Status: ${job.status}`);
@@ -196,7 +196,7 @@
         if (job.status === 'done') {
           clearInterval(pollInterval);
           const statusDiv = document.getElementById('status');
-          statusDiv.innerHTML += `<br><a href="http://localhost:3000/api/file/${currentJobId}" download>Download File</a>`;
+          statusDiv.innerHTML += `<br><a href="/api/file/${currentJobId}" download>Download File</a>`;
           const btn = document.querySelector('button');
           btn.disabled = false;
           btn.textContent = 'Download';
