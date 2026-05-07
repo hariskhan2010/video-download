@@ -86,11 +86,18 @@ module.exports = async (req, res) => {
 
     if (!fs.existsSync(DOWNLOADS_DIR)) fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 
+    if (process.env.YOUTUBE_COOKIES) {
+      fs.writeFileSync('/tmp/cookies.txt', process.env.YOUTUBE_COOKIES);
+    }
+
+    const cookiesFlag = fs.existsSync('/tmp/cookies.txt')
+      ? '--cookies /tmp/cookies.txt' : '';
+
     const nodePath = getNodePath();
     const id = uuidv4();
     const outputTemplate = path.join(DOWNLOADS_DIR, `${id}.%(ext)s`);
 
-    const cmd = `"${ytDlpPath}" --js-runtimes "${nodePath}" --remote-components ejs:github -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`;
+    const cmd = `"${ytDlpPath}" ${cookiesFlag} --js-runtimes "${nodePath}" --remote-components ejs:github -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`;
 
     await new Promise((resolve, reject) => {
       exec(cmd, { maxBuffer: 1024 * 1024 * 100 }, (err, stdout, stderr) => {
