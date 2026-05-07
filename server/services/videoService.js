@@ -12,7 +12,7 @@ exports.downloadVideo = (url, jobId) => {
   return new Promise((resolve, reject) => {
     const outputTemplate = path.join(downloadsDir, `${jobId}.%(ext)s`);
     
-    exec(`yt-dlp --cookies-from-browser firefox --js-runtimes node --remote-components ejs:github -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`, (error, stdout, stderr) => {
+    exec(`yt-dlp --js-runtimes node --remote-components ejs:github --extractor-args "youtube:player_client=default" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(stderr || error.message));
         return;
