@@ -20,21 +20,13 @@
   ],
   "functions": {
     "api/download.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   },
   "routes": [
     {
       "src": "/api/download",
       "dest": "/api/download.js"
-    },
-    {
-      "src": "/api/status/(?<id>[^/]+)",
-      "dest": "/api/status.js?id=$id"
-    },
-    {
-      "src": "/api/file/(?<id>[^/]+)",
-      "dest": "/api/file.js?id=$id"
     },
     {
       "src": "/(.*)",
