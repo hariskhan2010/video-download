@@ -149,6 +149,9 @@
     <div class="input-group">
       <input type="text" id="url" placeholder="Paste video URL here">
     </div>
+    <div class="input-group" style="margin-bottom:10px">
+      <textarea id="cookies" placeholder="Paste cookies.txt here (optional - needed for age-restricted videos)" style="width:100%;padding:10px;border:none;border-radius:10px;background:#f0f0f0;font-size:12px;resize:vertical;min-height:40px;box-shadow:inset 0 2px 5px rgba(0,0,0,0.1)"></textarea>
+    </div>
     <button onclick="startDownload()">Download</button>
     <div id="status"></div>
   </div>
@@ -166,10 +169,12 @@
       btn.textContent = 'Processing...';
 
       try {
+        const cookies = document.getElementById('cookies').value.trim();
+
         const res = await fetch('/api/download', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
+          body: JSON.stringify({ url, cookies: cookies || undefined })
         });
 
         const contentType = res.headers.get('Content-Type') || '';

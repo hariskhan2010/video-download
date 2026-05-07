@@ -9,6 +9,20 @@
       }
     },
     {
+      "src": "api/status.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 10
+      }
+    },
+    {
+      "src": "api/file.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 60
+      }
+    },
+    {
       "src": "client/**",
       "use": "@vercel/static"
     }
@@ -16,7 +30,16 @@
   "routes": [
     {
       "src": "/api/download",
-      "dest": "/api/download.js"
+      "dest": "/api/download.js",
+      "methods": ["POST", "OPTIONS"]
+    },
+    {
+      "src": "/api/status/(?<id>[^/]+)",
+      "dest": "/api/status.js?id=$id"
+    },
+    {
+      "src": "/api/file/(?<id>[^/]+)",
+      "dest": "/api/file.js?id=$id"
     },
     {
       "src": "/(.*)",
