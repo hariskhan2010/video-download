@@ -158,24 +158,49 @@
     let pollInterval = null;
 
     async function startDownload() {
-      const url = document.getElementById('url').value;
+      const url = document.getElementById('url').value.trim();
       if (!url) return alert('Please enter a URL');
 
       const btn = document.querySelector('button');
       btn.disabled = true;
       btn.textContent = 'Processing...';
 
-      const res = await fetch('http://localhost:3000/api/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
+      try {
+        const res = await fetch('/api/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
 
-      const data = await res.json();
-      currentJobId = data.jobId;
-      updateStatus('pending', 'Status: Pending...');
+        const contentType = res.headers.get('Content-Type') || '';
 
-      pollStatus();
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data.error) {
+            updateStatus('error', data.error);
+            return resetBtn();
+          }
+          currentJobId = data.jobId;
+          updateStatus('pending', 'Status: Pending...');
+          pollStatus();
+        } else {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          updateStatus('done', 'Download ready!');
+          document.getElementById('status').innerHTML +=
+            `<br><a href="${url}" download="video.mp4">Download File</a>`;
+          resetBtn();
+        }
+      } catch (err) {
+        updateStatus('error', 'Connection failed. Check if server is running.');
+        resetBtn();
+      }
+    }
+
+    function resetBtn() {
+      const btn = document.querySelector('button');
+      btn.disabled = false;
+      btn.textContent = 'Download';
     }
 
     function updateStatus(status, message) {
@@ -186,26 +211,32 @@
 
     function pollStatus() {
       if (pollInterval) clearInterval(pollInterval);
-      
+
       pollInterval = setInterval(async () => {
-        const res = await fetch(`http://localhost:3000/api/status/${currentJobId}`);
-        const job = await res.json();
+        try {
+          const res = await fetch(`/api/status/${currentJobId}`);
+          if (!res.ok) {
+            clearInterval(pollInterval);
+            updateStatus('error', 'Job not found');
+            return resetBtn();
+          }
+          const job = await res.json();
+          updateStatus(job.status, `Status: ${job.status}`);
 
-        updateStatus(job.status, `Status: ${job.status}`);
-
-        if (job.status === 'done') {
+          if (job.status === 'done') {
+            clearInterval(pollInterval);
+            document.getElementById('status').innerHTML +=
+              `<br><a href="/api/file/${currentJobId}" download>Download File</a>`;
+            resetBtn();
+          } else if (job.status === 'error') {
+            clearInterval(pollInterval);
+            updateStatus('error', job.error || 'Download failed');
+            resetBtn();
+          }
+        } catch (err) {
           clearInterval(pollInterval);
-          const statusDiv = document.getElementById('status');
-          statusDiv.innerHTML += `<br><a href="http://localhost:3000/api/file/${currentJobId}" download>Download File</a>`;
-          const btn = document.querySelector('button');
-          btn.disabled = false;
-          btn.textContent = 'Download';
-        } else if (job.status === 'error') {
-          clearInterval(pollInterval);
-          updateStatus('error', `Status: Error<br>${job.error}`);
-          const btn = document.querySelector('button');
-          btn.disabled = false;
-          btn.textContent = 'Download';
+          updateStatus('error', 'Connection lost.');
+          resetBtn();
         }
       }, 2000);
     }

@@ -3,15 +3,13 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-const JOBS_FILE = path.join('/tmp', 'jobs.json');
+const ytDlpPath = '/tmp/yt-dlp';
 
-function readJobs() {
-  if (!fs.existsSync(JOBS_FILE)) return {};
-  return JSON.parse(fs.readFileSync(JOBS_FILE, 'utf8'));
-}
-
-function writeJobs(jobs) {
-  fs.writeFileSync(JOBS_FILE, JSON.stringify(jobs, null, 2));
+async function ensureBinary() {
+  if (fs.existsSync(ytDlpPath)) return;
+  const res = await fetch('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp');
+  const buf = Buffer.from(await res.arrayBuffer());
+  fs.writeFileSync(ytDlpPath, buf, { mode: 0o755 });
 }
 
 module.exports = async (req, res) => {
@@ -24,41 +22,47 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'URL is required' });
   }
 
-  const jobId = uuidv4();
-  const jobs = readJobs();
-  jobs[jobId] = { status: 'pending', url, filename: null, error: null };
-  writeJobs(jobs);
+  try {
+    await ensureBinary();
+  } catch (error) {
+    return res.status(500).json({ error: `Failed to get yt-dlp: ${error.message}` });
+  }
 
-  res.json({ jobId, status: 'pending' });
+  const downloadsDir = '/tmp/downloads';
+  if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
+
+  const jobId = uuidv4();
+  const outputTemplate = path.join(downloadsDir, `${jobId}.%(ext)s`);
 
   try {
-    jobs[jobId].status = 'downloading';
-    writeJobs(jobs);
-    
-    const downloadsDir = '/tmp/downloads';
-    if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
-    
-    const outputTemplate = path.join(downloadsDir, `${jobId}.%(ext)s`);
-    
-    exec(`yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`, 
-      (error, stdout, stderr) => {
-        if (error) {
-          jobs[jobId].status = 'error';
-          jobs[jobId].error = stderr || error.message;
-        } else {
-          const files = fs.readdirSync(downloadsDir);
-          const downloadedFile = files.find(f => f.startsWith(jobId));
-          if (downloadedFile) {
-            jobs[jobId].status = 'done';
-            jobs[jobId].filename = path.join(downloadsDir, downloadedFile);
-          }
+    await new Promise((resolve, reject) => {
+      exec(
+        `"${ytDlpPath}" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`,
+        (error, stdout, stderr) => {
+          if (error) reject(new Error(stderr || error.message));
+          else resolve(stdout);
         }
-        writeJobs(jobs);
-      }
-    );
+      );
+    });
   } catch (error) {
-    jobs[jobId].status = 'error';
-    jobs[jobId].error = error.message;
-    writeJobs(jobs);
+    return res.status(500).json({ error: `Download failed: ${error.message}` });
   }
+
+  const files = fs.readdirSync(downloadsDir);
+  const downloadedFile = files.find(f => f.startsWith(jobId));
+  if (!downloadedFile) {
+    return res.status(500).json({ error: 'Downloaded file not found' });
+  }
+
+  const filePath = path.join(downloadsDir, downloadedFile);
+  const stat = fs.statSync(filePath);
+
+  res.writeHead(200, {
+    'Content-Type': 'video/mp4',
+    'Content-Disposition': `attachment; filename="video-${jobId}.mp4"`,
+    'Content-Length': stat.size,
+  });
+
+  const stream = fs.createReadStream(filePath);
+  stream.pipe(res);
 };

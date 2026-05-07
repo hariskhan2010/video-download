@@ -3,11 +3,10 @@
   "builds": [
     {
       "src": "api/download.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/status.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 300
+      }
     },
     {
       "src": "client/**",
@@ -18,10 +17,6 @@
     {
       "src": "/api/download",
       "dest": "/api/download.js"
-    },
-    {
-      "src": "/api/status/(?<id>[^/]+)",
-      "dest": "/api/status.js?id=$id"
     },
     {
       "src": "/(.*)",
