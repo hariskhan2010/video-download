@@ -9,7 +9,13 @@ const ytDlpPath = path.join(ytDlpDir, `yt-dlp${process.platform === 'win32' ? '.
 async function ensureBinary() {
   if (fs.existsSync(ytDlpPath)) return;
   if (!fs.existsSync(ytDlpDir)) fs.mkdirSync(ytDlpDir, { recursive: true });
-  const res = await fetch('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp');
+
+  const apiRes = await fetch('https://api.github.com/repos/yt-dlp/yt-dlp/releases?per_page=1');
+  const [release] = await apiRes.json();
+  const asset = release.assets.find(a => a.name === 'yt-dlp');
+  if (!asset) throw new Error('yt-dlp binary asset not found in latest release');
+
+  const res = await fetch(asset.browser_download_url);
   const buf = Buffer.from(await res.arrayBuffer());
   fs.writeFileSync(ytDlpPath, buf, { mode: 0o755 });
 }
