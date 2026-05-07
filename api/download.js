@@ -5,12 +5,11 @@ const https = require('https');
 const { v4: uuidv4 } = require('uuid');
 
 const isWin = process.platform === 'win32';
-const binaryName = isWin ? 'yt-dlp.exe' : 'yt-dlp_linux';
-const ytDlpPath = path.join('/tmp', binaryName);
+const ytDlpName = isWin ? 'yt-dlp.exe' : 'yt-dlp_linux';
+const ytDlpPath = path.join('/tmp', ytDlpName);
 
 async function ensureBinary() {
   if (fs.existsSync(ytDlpPath)) return;
-
   try {
     await new Promise((resolve, reject) => {
       exec('yt-dlp --version', (err, out) => err ? reject(err) : resolve(out));
@@ -25,8 +24,8 @@ async function ensureBinary() {
         res.on('end', () => {
           try {
             const [release] = JSON.parse(d);
-            const asset = release.assets.find(a => a.name === binaryName);
-            if (!asset) return reject(new Error(`${binaryName} not found in release`));
+            const asset = release.assets.find(a => a.name === ytDlpName);
+            if (!asset) return reject(new Error(`${ytDlpName} not found`));
             const url = asset.browser_download_url;
             https.get(url, { headers: { 'User-Agent': 'video-downloader' } }, (r2) => {
               if (r2.statusCode >= 300 && r2.headers.location) {
@@ -62,7 +61,7 @@ module.exports = async (req, res) => {
     const out = path.join(dir, `${id}.%(ext)s`);
 
     await new Promise((resolve, reject) => {
-      exec(`"${ytDlpPath}" -f "best[ext=mp4][vcodec^=avc1][acodec!=none]/best[ext=mp4][acodec!=none]/best" -o "${out}" "${url}"`,
+      exec(`"${ytDlpPath}" -f "best[ext=mp4][acodec!=none]/best" -o "${out}" "${url}"`,
         (err, stdout, stderr) => err ? reject(new Error(stderr || err.message)) : resolve(stdout));
     });
 
