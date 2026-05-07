@@ -1,10 +1,10 @@
 const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
 const { v4: uuidv4 } = require('uuid');
 
-const ytDlpPath = '/tmp/yt-dlp';
+const builtBinary = path.join(__dirname, 'yt-dlp');
+const ytDlpPath = fs.existsSync(builtBinary) ? builtBinary : '/tmp/yt-dlp';
 
 async function ensureBinary() {
   if (fs.existsSync(ytDlpPath)) return;
@@ -13,29 +13,17 @@ async function ensureBinary() {
     await new Promise((resolve, reject) => {
       exec('yt-dlp --version', (err, out) => err ? reject(err) : resolve(out));
     });
-    fs.writeFileSync(ytDlpPath, '#!/bin/sh\nexec yt-dlp "$@"\n', { mode: 0o755 });
+    if (ytDlpPath === '/tmp/yt-dlp') {
+      fs.writeFileSync(ytDlpPath, '#!/bin/sh\nexec yt-dlp "$@"\n', { mode: 0o755 });
+    }
     return;
   } catch {}
 
-  const buf = await new Promise((resolve, reject) => {
-    https.get('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp',
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
-        let url = res.headers.location;
-        if (url) {
-          https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (r2) => {
-            if (r2.statusCode !== 200) { reject(new Error(`HTTP ${r2.statusCode}`)); return; }
-            const c = []; r2.on('data', d => c.push(d)); r2.on('end', () => resolve(Buffer.concat(c)));
-          }).on('error', reject);
-          return;
-        }
-        if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
-        const c = []; res.on('data', d => c.push(d)); res.on('end', () => resolve(Buffer.concat(c)));
-      }).on('error', reject);
+  await new Promise((resolve, reject) => {
+    exec(`curl -L -o "${ytDlpPath}" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp" && chmod +x "${ytDlpPath}"`,
+      (err, stdout, stderr) => err ? reject(new Error(stderr || err.message)) : resolve(stdout));
   });
-  fs.writeFileSync(ytDlpPath, buf, { mode: 0o755 });
 }
-
-const binaryReady = ensureBinary().catch(() => {});
 
 module.exports = async (req, res) => {
   try {
@@ -43,8 +31,8 @@ module.exports = async (req, res) => {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
-    await binaryReady;
-    if (!fs.existsSync(ytDlpPath)) return res.status(500).json({ error: 'yt-dlp not available' });
+    await ensureBinary();
+    if (!fs.existsSync(ytDlpPath)) return res.status(500).json({ error: 'yt-dlp binary not found' });
 
     const dir = '/tmp/downloads';
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -58,7 +46,7 @@ module.exports = async (req, res) => {
 
     const files = fs.readdirSync(dir);
     const f = files.find(x => x.startsWith(id));
-    if (!f) return res.status(500).json({ error: 'File not found' });
+    if (!f) return res.status(500).json({ error: 'Downloaded file not found' });
     const fp = path.join(dir, f);
     const st = fs.statSync(fp);
     res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Disposition': `attachment; filename="video-${id}.mp4"`, 'Content-Length': st.size });

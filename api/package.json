@@ -2,6 +2,9 @@
   "name": "video-downloader",
   "version": "1.0.0",
   "description": "Video downloader for Vercel",
+  "scripts": {
+    "postinstall": "node -e \"if(process.platform!=='win32'){require('child_process').execSync('curl -L -o yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && chmod +x yt-dlp',{cwd:__dirname,stdio:'inherit'})}\""
+  },
   "dependencies": {
     "uuid": "^11.1.0"
   }

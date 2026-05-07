@@ -8,3 +8,4 @@ downloads/
 *.webm
 *.mp3
 .DS_Store
+api/yt-dlp
