@@ -165,17 +165,26 @@
       btn.disabled = true;
       btn.textContent = 'Processing...';
 
-      const res = await fetch('/api/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
+      try {
+        const res = await fetch('/api/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
 
-      const data = await res.json();
-      currentJobId = data.jobId;
-      updateStatus('pending', 'Status: Pending...');
+        const data = await res.json();
+        if (data.error) {
+          resetButton();
+          return updateStatus('error', data.error);
+        }
 
-      pollStatus();
+        currentJobId = data.jobId;
+        updateStatus('pending', 'Queued...');
+        pollStatus();
+      } catch (err) {
+        resetButton();
+        updateStatus('error', 'Connection failed. Check if server is running.');
+      }
     }
 
     function updateStatus(status, message) {
@@ -184,28 +193,47 @@
       statusDiv.innerHTML = message;
     }
 
+    function resetButton() {
+      const btn = document.querySelector('button');
+      btn.disabled = false;
+      btn.textContent = 'Download';
+    }
+
     function pollStatus() {
       if (pollInterval) clearInterval(pollInterval);
-      
+
       pollInterval = setInterval(async () => {
-        const res = await fetch(`/api/status/${currentJobId}`);
-        const job = await res.json();
+        try {
+          const res = await fetch(`/api/status/${currentJobId}`);
+          if (!res.ok) {
+            resetButton();
+            clearInterval(pollInterval);
+            return updateStatus('error', 'Job not found');
+          }
 
-        updateStatus(job.status, `Status: ${job.status}`);
+          const job = await res.json();
+          if (!job || !job.status) {
+            resetButton();
+            clearInterval(pollInterval);
+            return updateStatus('error', 'Invalid server response');
+          }
 
-        if (job.status === 'done') {
+          updateStatus(job.status, `Status: ${job.status}`);
+
+          if (job.status === 'done') {
+            clearInterval(pollInterval);
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML += `<br><a href="/api/file/${currentJobId}" download>Download File</a>`;
+            resetButton();
+          } else if (job.status === 'error') {
+            clearInterval(pollInterval);
+            updateStatus('error', `Error: ${job.error || 'Unknown error'}`);
+            resetButton();
+          }
+        } catch (err) {
           clearInterval(pollInterval);
-          const statusDiv = document.getElementById('status');
-          statusDiv.innerHTML += `<br><a href="/api/file/${currentJobId}" download>Download File</a>`;
-          const btn = document.querySelector('button');
-          btn.disabled = false;
-          btn.textContent = 'Download';
-        } else if (job.status === 'error') {
-          clearInterval(pollInterval);
-          updateStatus('error', `Status: Error<br>${job.error}`);
-          const btn = document.querySelector('button');
-          btn.disabled = false;
-          btn.textContent = 'Download';
+          resetButton();
+          updateStatus('error', 'Connection lost. Check server.');
         }
       }, 2000);
     }
