@@ -13,6 +13,20 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'URL is required' });
   }
 
+  // Check if yt-dlp is available
+  try {
+    await new Promise((resolve, reject) => {
+      exec('yt-dlp --version', (error, stdout) => {
+        if (error) reject(error);
+        else resolve(stdout);
+      });
+    });
+  } catch {
+    return res.status(500).json({
+      error: 'yt-dlp is not installed. This API only works on the local Express server where yt-dlp is available.'
+    });
+  }
+
   const jobId = uuidv4();
   const jobsDir = '/tmp/jobs';
   const downloadsDir = '/tmp/downloads';
