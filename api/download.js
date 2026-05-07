@@ -62,7 +62,7 @@ module.exports = async (req, res) => {
     const out = path.join(dir, `${id}.%(ext)s`);
 
     await new Promise((resolve, reject) => {
-      exec(`"${ytDlpPath}" -f "best[ext=mp4][vcodec^=avc1]/best[ext=mp4]/best" -o "${out}" "${url}"`,
+      exec(`"${ytDlpPath}" -f "best[ext=mp4][vcodec^=avc1][acodec!=none]/best[ext=mp4][acodec!=none]/best" -o "${out}" "${url}"`,
         (err, stdout, stderr) => err ? reject(new Error(stderr || err.message)) : resolve(stdout));
     });
 
