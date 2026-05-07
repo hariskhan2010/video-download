@@ -7,17 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const isWin = process.platform === 'win32';
 const ytDlpName = isWin ? 'yt-dlp.exe' : 'yt-dlp_linux';
 const ytDlpPath = path.join('/tmp', ytDlpName);
-const JOBS_FILE = path.join('/tmp', 'jobs.json');
 const DOWNLOADS_DIR = path.join('/tmp', 'downloads');
-
-function readJobs() {
-  if (!fs.existsSync(JOBS_FILE)) return {};
-  return JSON.parse(fs.readFileSync(JOBS_FILE, 'utf8'));
-}
-
-function saveJobs(jobs) {
-  fs.writeFileSync(JOBS_FILE, JSON.stringify(jobs));
-}
 
 async function ensureBinary() {
   if (fs.existsSync(ytDlpPath)) return;
@@ -70,7 +60,8 @@ function validateUrl(url) {
 }
 
 function getNodePath() {
-  return process.execPath;
+  const p = process.execPath;
+  return isWin ? p : (p || '/usr/bin/node');
 }
 
 module.exports = async (req, res) => {
@@ -78,7 +69,7 @@ module.exports = async (req, res) => {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
       });
       return res.end();
@@ -90,68 +81,45 @@ module.exports = async (req, res) => {
     if (!url) return res.status(400).json({ error: 'URL is required' });
     if (!validateUrl(url)) return res.status(400).json({ error: 'Invalid or unsupported URL' });
 
-    const jobId = uuidv4();
-    const jobs = readJobs();
-    jobs[jobId] = { status: 'pending', url, filename: null, error: null };
-    saveJobs(jobs);
+    await ensureBinary();
+    if (!fs.existsSync(ytDlpPath)) return res.status(500).json({ error: 'yt-dlp not available' });
 
-    res.json({ jobId, status: 'pending' });
+    if (!fs.existsSync(DOWNLOADS_DIR)) fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 
-    try {
-      jobs[jobId].status = 'preparing';
-      saveJobs(jobs);
-
-      await ensureBinary();
-      if (!fs.existsSync(ytDlpPath)) {
-        jobs[jobId].status = 'error';
-        jobs[jobId].error = 'yt-dlp not available';
-        saveJobs(jobs);
-        return;
-      }
-
-      if (!fs.existsSync(DOWNLOADS_DIR)) fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
-
-      if (cookies) {
-        fs.writeFileSync('/tmp/cookies.txt', cookies);
-      } else if (process.env.YOUTUBE_COOKIES) {
-        fs.writeFileSync('/tmp/cookies.txt', process.env.YOUTUBE_COOKIES);
-      }
-
-      const cookiesFlag = fs.existsSync('/tmp/cookies.txt')
-        ? `--cookies /tmp/cookies.txt`
-        : '';
-
-      const nodePath = getNodePath();
-      const jsRuntimeFlag = `--js-runtimes "${nodePath}"`;
-      const remoteComponentsFlag = '--remote-components ejs:github';
-
-      const outputTemplate = path.join(DOWNLOADS_DIR, `${jobId}.%(ext)s`);
-
-      jobs[jobId].status = 'downloading';
-      saveJobs(jobs);
-
-      const cmd = `"${ytDlpPath}" ${cookiesFlag} ${jsRuntimeFlag} ${remoteComponentsFlag} -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`;
-
-      await new Promise((resolve, reject) => {
-        exec(cmd, { maxBuffer: 1024 * 1024 * 100 }, (err, stdout, stderr) => {
-          if (err) reject(new Error(stderr || err.message));
-          else resolve(stdout);
-        });
-      });
-
-      const files = fs.readdirSync(DOWNLOADS_DIR);
-      const f = files.find(x => x.startsWith(jobId));
-      if (!f) throw new Error('Downloaded file not found');
-      const fp = path.join(DOWNLOADS_DIR, f);
-
-      jobs[jobId].status = 'done';
-      jobs[jobId].filename = fp;
-      saveJobs(jobs);
-    } catch (err) {
-      jobs[jobId].status = 'error';
-      jobs[jobId].error = err.message;
-      saveJobs(jobs);
+    if (cookies) {
+      fs.writeFileSync('/tmp/cookies.txt', cookies);
+    } else if (process.env.YOUTUBE_COOKIES) {
+      fs.writeFileSync('/tmp/cookies.txt', process.env.YOUTUBE_COOKIES);
     }
+
+    const cookiesFlag = fs.existsSync('/tmp/cookies.txt')
+      ? '--cookies /tmp/cookies.txt' : '';
+
+    const nodePath = getNodePath();
+    const id = uuidv4();
+    const outputTemplate = path.join(DOWNLOADS_DIR, `${id}.%(ext)s`);
+
+    const cmd = `"${ytDlpPath}" ${cookiesFlag} --js-runtimes "${nodePath}" --remote-components ejs:github -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`;
+
+    await new Promise((resolve, reject) => {
+      exec(cmd, { maxBuffer: 1024 * 1024 * 100 }, (err, stdout, stderr) => {
+        if (err) reject(new Error(stderr || err.message));
+        else resolve(stdout);
+      });
+    });
+
+    const files = fs.readdirSync(DOWNLOADS_DIR);
+    const f = files.find(x => x.startsWith(id));
+    if (!f) return res.status(500).json({ error: 'Downloaded file not found' });
+    const fp = path.join(DOWNLOADS_DIR, f);
+    const stat = fs.statSync(fp);
+
+    res.writeHead(200, {
+      'Content-Type': 'video/mp4',
+      'Content-Disposition': `attachment; filename="video.mp4"`,
+      'Content-Length': stat.size,
+    });
+    fs.createReadStream(fp).pipe(res);
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
